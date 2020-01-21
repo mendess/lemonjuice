@@ -1,4 +1,4 @@
-use crate::block::{Config, GlobalConfig};
+use crate::block::{Alignment, Config, GlobalConfig};
 use crate::text::ComputedText;
 use xcb::base::Connection;
 use xcb_util::ewmh;
@@ -10,7 +10,7 @@ pub struct Bar {
     surface: cairo::XCBSurface,
     width: u16,
     height: u16,
-    contents: Config,
+    pub contents: Config,
     global_config: GlobalConfig,
     contents_cache: Vec<ComputedText>,
 }
@@ -87,6 +87,37 @@ impl Bar {
             .unwrap()
             .render(&self.surface)
             .unwrap();
+        self.conn.flush();
+    }
+
+    pub fn render_contents(&mut self, monitor: usize) {
+        self.contents_cache.clear();
+        if let Some(blocks) = self.contents.get_mut(&Alignment::Right) {
+            let surface = &self.surface;
+            let contents_cache = &mut self.contents_cache;
+            blocks
+                .iter_mut()
+                .map(|b| b.to_text(monitor))
+                .filter_map(|x| x)
+                .map(|t| t.compute(surface))
+                .try_for_each(|maybe_t| maybe_t.map(|t| contents_cache.push(t)))
+                .expect("Failed to render the right side");
+        }
+        if let Some(blocks) = self.contents.get_mut(&Alignment::Left) {
+            let surface = &self.surface;
+            let contents_cache = &mut self.contents_cache;
+            blocks
+                .iter_mut()
+                .map(|b| b.to_text(monitor))
+                .filter_map(|x| x)
+                .map(|t| t.compute(surface))
+                .try_for_each(|maybe_t| maybe_t.map(|t| contents_cache.push(t)))
+                .expect("Failed to render the left side");
+        }
+        self.contents_cache
+            .iter()
+            .try_for_each(|t| t.render(&self.surface))
+            .expect("Render failed");
         self.conn.flush();
     }
 }

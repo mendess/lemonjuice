@@ -1,5 +1,10 @@
 use cairo::Context;
-use std::{fmt::{self, Display}, error::Error, num::ParseIntError, str::FromStr};
+use std::{
+    error::Error,
+    fmt::{self, Display},
+    num::ParseIntError,
+    str::FromStr,
+};
 
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub struct Color(f64, f64, f64, f64);
@@ -21,7 +26,7 @@ impl Color {
     color!(black, (0.0, 0.0, 0.0));
 
     pub fn apply_to_context(&self, cr: &Context) {
-        cr.set_source_rgb(self.0, self.1, self.2);
+        cr.set_source_rgb(self.1, self.2, self.3);
     }
 }
 
@@ -30,12 +35,17 @@ impl FromStr for Color {
     fn from_str(color: &str) -> Result<Color, Self::Err> {
         let color = color.trim_matches('#');
         match color.len() {
-            0 => Ok(Color(1.0,0.0, 0.0, 0.0)),
-            1..=2 => Ok(Color(1.0,0.0, 0.0, u8::from_str_radix(color, 16)? as f64 / 255.0)),
+            0 => Ok(Color(1.0, 0.0, 0.0, 0.0)),
+            1..=2 => Ok(Color(
+                1.0,
+                0.0,
+                0.0,
+                u8::from_str_radix(color, 16)? as f64 / 255.0,
+            )),
             3..=4 => {
                 let (g, b) = color.split_at(color.len() - 2);
                 Ok(Color(
-                        1.0,
+                    1.0,
                     0.0,
                     u8::from_str_radix(g, 16)? as f64 / 255.0,
                     u8::from_str_radix(b, 16)? as f64 / 255.0,
@@ -45,7 +55,7 @@ impl FromStr for Color {
                 let (rest, b) = color.split_at(color.len() - 2);
                 let (r, g) = rest.split_at(rest.len() - 2);
                 Ok(Color(
-                        1.0,
+                    1.0,
                     u8::from_str_radix(r, 16)? as f64 / 255.0,
                     u8::from_str_radix(g, 16)? as f64 / 255.0,
                     u8::from_str_radix(b, 16)? as f64 / 255.0,

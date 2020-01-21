@@ -1,13 +1,12 @@
-mod one_or_more;
 mod error;
+mod one_or_more;
+use crate::text::{color::Color, Attributes, Font, Padding, Text};
 use error::ParseError;
-use crate::text::{color::Color, Font};
 use one_or_more::OneOrMore;
 use std::{
     collections::HashMap,
     convert::TryFrom,
-    io,
-    ops::Index,
+    io, mem,
     process::{Command, Stdio},
     str::{self, FromStr},
     sync::{Arc, RwLock},
@@ -53,17 +52,18 @@ enum Content {
     Static(String),
     Cmd {
         cmd: String,
-        last_run: OneOrMore<RwLock<String>>,
+        last_run: OneOrMore<String>,
     },
     Persistent {
         cmd: String,
-        last_run: OneOrMore<Arc<RwLock<String>>>,
+        last_run: OneOrMore<String>,
     },
 }
 
 impl Content {
-    fn update(&self) {
+    fn update(&mut self) {
         if let Self::Cmd { cmd, last_run } = self {
+            dbg!(&cmd);
             for m in 0..last_run.len() {
                 match Command::new("sh")
                     .args(&["-c", cmd])
@@ -89,18 +89,19 @@ impl Content {
                             l
                         }
                     }) {
-                    Ok(o) => *(last_run.index(m).write().unwrap()) = o,
-                    Err(e) => *(last_run.index(m).write().unwrap()) = e,
+                    Ok(o) => last_run[m] = o,
+                    Err(e) => last_run[m] = e,
                 }
             }
+            dbg!(last_run);
         }
     }
 
     fn is_empty(&self, monitor: usize) -> bool {
         match self {
             Self::Static(s) => s.is_empty(),
-            Self::Cmd { last_run, .. } => last_run[monitor].read().unwrap().is_empty(),
-            Self::Persistent { last_run, .. } => last_run[monitor].read().unwrap().is_empty(),
+            Self::Cmd { last_run, .. } => last_run[monitor].is_empty(),
+            Self::Persistent { last_run, .. } => last_run[monitor].is_empty(),
         }
     }
 
@@ -108,17 +109,32 @@ impl Content {
         match &mut self {
             Self::Cmd { last_run, .. } => {
                 while last_run.len() < n_monitor {
-                    last_run.push(RwLock::new(String::new()));
+                    last_run.push(String::new());
                 }
             }
             Self::Persistent { last_run, .. } => {
                 while last_run.len() < n_monitor {
-                    last_run.push(Arc::new(RwLock::new(String::new())));
+                    last_run.push(String::new());
                 }
             }
             _ => (),
         }
         self
+    }
+
+    fn take(&mut self, mon: usize) -> Option<String> {
+        let f = |s: &mut String| {
+            if !s.is_empty() {
+                Some(mem::replace(s, String::new()))
+            } else {
+                None
+            }
+        };
+        match self {
+            Self::Static(s) => Some(s.clone()),
+            Self::Cmd { last_run, .. } => f(&mut last_run[mon]),
+            Self::Persistent { last_run, .. } => f(&mut last_run[mon]),
+        }
     }
 }
 
@@ -127,7 +143,7 @@ pub struct Block {
     fg: Option<Color>,
     un: Option<Color>,
     font: Option<Font>,
-    offset: Option<u32>,
+    offset: Option<f64>,
     actions: [Option<String>; 5],
     content: Content,
     interval: Duration,
@@ -138,6 +154,33 @@ pub struct Block {
 }
 
 impl Block {
+    pub fn to_text(&mut self, monitor: usize) -> Option<Text> {
+        self.content.take(monitor).map(|text| {
+            let mut attr = Attributes::default();
+            if let Some(fg) = self.fg {
+                attr = attr.with_fg_color(fg);
+            }
+            if let Some(bg) = self.bg {
+                attr = attr.with_bg_color(bg);
+            }
+            if let Some(font) = &self.font {
+                attr = attr.with_font(font.clone());
+            }
+            if let Some(offset) = self.offset {
+                match self.alignment {
+                    Alignment::Left => attr = attr.with_padding(Padding::left(offset)),
+                    Alignment::Right => attr = attr.with_padding(Padding::left(offset)),
+                    Alignment::Middle => (),
+                }
+            }
+            Text { attr, text }
+        })
+    }
+
+    pub fn update(&mut self) {
+        self.content.update();
+    }
+
     fn parse(block: &str, n_monitor: usize) -> Result<Self, ParseError> {
         use BlockBuilder as BB;
         let mut block_b = BB::default();
@@ -221,7 +264,7 @@ pub struct BlockBuilder {
     fg: Option<Color>,
     un: Option<Color>,
     font: Option<Font>,
-    offset: Option<u32>,
+    offset: Option<f64>,
     actions: [Option<String>; 5],
     content: Option<Content>,
     interval: Option<Duration>,
@@ -290,7 +333,6 @@ impl BlockBuilder {
         }
     }
 }
-
 
 #[derive(Default)]
 pub struct GlobalConfig {
