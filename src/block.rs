@@ -1,5 +1,7 @@
 mod error;
 mod one_or_more;
+mod stream;
+
 use crate::text::{color::Color, Attributes, Font, Padding, Text};
 use error::ParseError;
 use one_or_more::OneOrMore;
@@ -63,7 +65,6 @@ enum Content {
 impl Content {
     fn update(&mut self) {
         if let Self::Cmd { cmd, last_run } = self {
-            dbg!(&cmd);
             for m in 0..last_run.len() {
                 match Command::new("sh")
                     .args(&["-c", cmd])
@@ -93,7 +94,6 @@ impl Content {
                     Err(e) => last_run[m] = e,
                 }
             }
-            dbg!(last_run);
         }
     }
 

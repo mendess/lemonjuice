@@ -15,7 +15,6 @@ fn main() {
     };
     let mut bar = bar::Bar::new(global_config, config).unwrap();
     bar.contents.values_mut().flatten().for_each(|c| {
-        std::thread::sleep(std::time::Duration::from_secs(2));
         c.update();
     });
     bar.render_contents(0);
