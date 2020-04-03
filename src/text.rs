@@ -160,7 +160,7 @@ impl PartialEq<ComputedText> for Text {
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub(crate) struct ComputedText {
+pub struct ComputedText {
     pub attr: Attributes,
     pub text: String,
 
